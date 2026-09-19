@@ -1,0 +1,8 @@
+pywebview>=4.4
+opencv-python>=4.9
+requests>=2.31
+gTTS>=2.5
+pygame>=2.5
+mediapipe>=0.10
+
+# $env:GEMINI_API_KEY = "kunci_kamu"

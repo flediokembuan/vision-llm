@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Vision LLM Camera Analyzer</title>
+<style>
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;}
+  body{
+    font-family:'Segoe UI',sans-serif;
+    background:#08050f;color:#eee;
+    overflow:hidden;
+  }
+
+  .frame{height:100vh;width:100vw;display:flex;flex-direction:column;background:#08050f;}
+  .titlebar{flex:none;padding:11px 18px;font-size:11px;color:#e774ff;font-family:'Consolas',monospace;border-bottom:1px solid #2a1a3a;display:flex;justify-content:space-between;background:#0c0714;}
+  .titlebar .live{display:flex;align-items:center;gap:6px;color:#00f0ff;}
+  .titlebar .live i{width:6px;height:6px;border-radius:50%;background:#00f0ff;animation:pulse 1.4s infinite;}
+  @keyframes pulse{50%{opacity:.25;}}
+
+  .main-grid{flex:1;display:grid;grid-template-columns:1fr 340px;grid-template-rows:1fr auto;gap:1px;background:#1a0f2e;overflow:hidden;}
+
+  .cam-panel{
+    grid-column:1;grid-row:1;position:relative;overflow:hidden;margin:16px 16px 12px 16px;border-radius:10px;
+    background:radial-gradient(circle at 42% 32%,#1a0f2e,#050208 80%);border:1px solid #2a1a3a;
+  }
+  .cam-feed{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none;}
+  .cam-placeholder{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#5a4a70;font-size:13px;font-family:'Consolas',monospace;text-align:center;padding:20px;}
+  .cam-tag{position:absolute;top:12px;left:12px;color:#00f0ff;font-size:10px;font-family:'Consolas',monospace;text-shadow:0 0 6px rgba(0,240,255,.6);z-index:3;}
+  .cam-scan{position:absolute;left:0;right:0;height:2px;top:0;opacity:0;background:linear-gradient(90deg,transparent,#00f0ff,transparent);z-index:3;}
+  .cam-scan.run{animation:scan 1.2s ease-in-out;}
+  @keyframes scan{0%{top:8%;opacity:1;}90%{opacity:1;}100%{top:92%;opacity:0;}}
+
+  .bottom-stack{grid-column:1 / -1;grid-row:2;background:#08050f;}
+
+  .process-row{flex:none;margin:0 16px 12px;background:#12081c;border:1px solid #3a2450;border-radius:8px;padding:9px 16px;}
+  .process-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;}
+  .process-top .k{font-size:9px;color:#8a6aa8;letter-spacing:.5px;font-family:'Consolas',monospace;}
+  .process-top .status{font-size:10.5px;color:#e774ff;font-family:'Consolas',monospace;display:flex;align-items:center;gap:6px;}
+  .process-top .status i{width:5px;height:5px;border-radius:50%;background:#e774ff;}
+  .process-top .status.working i{animation:pulse .6s infinite;}
+  .process-top .status.error{color:#ff6a6a;}
+  .process-top .status.error i{background:#ff6a6a;}
+  .process-bar{height:4px;border-radius:2px;background:#1a0f2e;overflow:hidden;}
+  .process-fill{height:100%;width:0%;background:linear-gradient(90deg,#e774ff,#00f0ff);transition:width .15s linear;}
+
+  .stat-row{flex:none;margin:0 16px 12px;display:flex;gap:10px;}
+  .stat-chip{flex:1;background:#12081c;border:1px solid #3a2450;border-radius:8px;padding:8px 12px;font-family:'Consolas',monospace;}
+  .stat-chip .k{display:block;font-size:9px;color:#8a6aa8;letter-spacing:.5px;margin-bottom:3px;}
+  .stat-chip .v{font-size:15px;color:#00f0ff;text-shadow:0 0 6px rgba(0,240,255,.5);}
+
+  .instr-row{flex:none;margin:0 16px 16px;display:flex;gap:10px;background:#12081c;border:1px solid #3a2450;border-radius:8px;padding:0 6px 0 14px;align-items:center;}
+  .instr-row input{flex:1;background:transparent;border:none;outline:none;color:#e0c7f0;font-family:inherit;font-size:13px;padding:11px 0;}
+  .instr-row button{background:#e774ff;color:#12081c;border:none;width:38px;height:38px;margin:6px 0;border-radius:6px;font-weight:700;cursor:pointer;}
+  .instr-row button:disabled{opacity:.5;cursor:not-allowed;}
+  .instr-row button:active:not(:disabled){transform:scale(.94);}
+
+  .mascot-dock{position:absolute;top:10px;right:10px;width:64px;z-index:6;}
+  .speech-bubble{background:#12081c;color:#f0d6ff;border:1.5px solid #e774ff;box-shadow:0 0 16px rgba(231,116,255,.4);border-radius:8px;padding:7px 10px;font-size:10.5px;line-height:1.45;max-width:200px;position:absolute;top:2px;right:72px;opacity:0;transform:translateX(8px);transition:all .3s ease;}
+  .speech-bubble.show{opacity:1;transform:translateX(0);}
+  .speech-bubble::after{content:'';position:absolute;top:14px;right:-6px;width:10px;height:10px;background:#12081c;border-right:1.5px solid #e774ff;border-top:1.5px solid #e774ff;transform:rotate(45deg);}
+
+  .bld{position:relative;animation:idle 2.2s ease-in-out infinite;transform-origin:bottom center;}
+  @keyframes idle{0%,100%{transform:rotate(-2deg);}50%{transform:rotate(2deg);}}
+  .bld.excited{animation:excite .2s ease-in-out infinite alternate;}
+  @keyframes excite{from{transform:rotate(-6deg) translateY(0);}to{transform:rotate(6deg) translateY(-4px);}}
+  .bld-antenna{position:absolute;top:-18px;left:50%;transform:translateX(-50%);width:2px;height:11px;background:#e774ff;}
+  .bld-antenna::after{content:'';position:absolute;top:-4px;left:50%;transform:translateX(-50%);width:6px;height:6px;border-radius:50%;background:#00f0ff;box-shadow:0 0 6px 2px rgba(0,240,255,.8);}
+  .bld.excited .bld-antenna::after{animation:blink .18s steps(1) infinite;}
+  @keyframes blink{50%{opacity:.15;}}
+  .bld-tower{width:52px;height:68px;margin:5px auto 0;position:relative;background:linear-gradient(180deg,#241238,#150a22 85%);border:1.5px solid #e774ff;border-radius:5px;box-shadow:0 0 12px rgba(231,116,255,.25), inset 0 0 14px rgba(0,240,255,.05);}
+  .bld-roofcap{position:absolute;top:-6px;left:9px;right:9px;height:7px;background:#e774ff;border-radius:2px 2px 0 0;box-shadow:0 0 8px rgba(231,116,255,.6);}
+  .bld-ledge{position:absolute;left:-3px;right:-3px;height:2px;background:#e774ff;opacity:.5;top:42px;}
+  .bld-winrow{position:absolute;left:6px;right:6px;display:flex;justify-content:space-between;}
+  .bld-winrow.r3{top:48px;}
+  .bld-lit{width:6px;height:6px;background:#00f0ff;border:1px solid #0a4a52;border-radius:1px;box-shadow:0 0 4px rgba(0,240,255,.7);}
+  .bld-lit.off{background:#1a1030;box-shadow:none;}
+  .bld-eyes{position:absolute;top:10px;left:0;right:0;display:flex;justify-content:center;gap:7px;z-index:2;}
+  .bld-eye{width:12px;height:10px;background:#0b0414;border:1.5px solid #00f0ff;border-radius:2px;position:relative;box-shadow:0 0 5px rgba(0,240,255,.5);}
+  .bld-eye::after{content:'';position:absolute;width:4px;height:4px;background:#e774ff;border-radius:50%;top:2px;left:2px;box-shadow:0 0 4px rgba(231,116,255,.9);}
+  .bld.excited .bld-eye::after{top:1px;left:4px;}
+  .bld-mouth{position:absolute;bottom:12px;left:50%;transform-origin:bottom center;transform:translateX(-50%) scaleY(1);width:13px;height:16px;border:1.5px solid #e774ff;border-bottom:none;border-radius:3px 3px 0 0;background:#12081c;transition:transform .18s ease;z-index:2;}
+  .bld-mouth::after{content:'';position:absolute;top:4px;left:50%;transform:translateX(-50%);width:4px;height:4px;border-radius:50%;background:#00f0ff;}
+  .bld.excited .bld-mouth{animation:door .2s ease-in-out infinite alternate;}
+  @keyframes door{from{transform:translateX(-50%) scaleY(1);}to{transform:translateX(-50%) scaleY(1.3) rotate(-3deg);}}
+  .bld-arm{position:absolute;width:5px;height:12px;background:#241238;border:1.5px solid #e774ff;border-radius:2px;top:18px;transform-origin:top center;}
+  .bld-arm.l{left:-5px;transform:rotate(16deg);}
+  .bld-arm.r{right:-5px;transform:rotate(-16deg);}
+  .bld.excited .bld-arm.l{animation:fL .18s ease-in-out infinite alternate;}
+  .bld.excited .bld-arm.r{animation:fR .18s ease-in-out infinite alternate;}
+  @keyframes fL{from{transform:rotate(16deg);}to{transform:rotate(52deg);}}
+  @keyframes fR{from{transform:rotate(-16deg);}to{transform:rotate(-52deg);}}
+  .bld-base{position:absolute;bottom:-4px;left:-5px;right:-5px;height:5px;background:#e774ff;border-radius:2px;box-shadow:0 0 6px rgba(231,116,255,.5);}
+
+  .ref-col{grid-column:2;grid-row:1;background:#0c0714;padding:16px 14px 12px 14px;margin:0;display:flex;flex-direction:column;}
+  .ref-tag{font-size:10px;color:#8a6aa8;letter-spacing:1px;font-family:'Consolas',monospace;margin-bottom:8px;}
+  .ref-screen{flex:1;border:1.5px dashed #3a2450;border-radius:12px;background:#12081c;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;position:relative;transition:border-color .25s ease,background .25s ease;overflow:hidden;}
+  .ref-screen.filled{border-style:solid;border-color:#e774ff;background:#170a24;}
+  .ref-icon{font-size:40px;opacity:.35;transition:opacity .25s ease;}
+  .ref-screen.filled .ref-icon{display:none;}
+  .ref-img{width:100%;height:100%;object-fit:contain;display:none;}
+  .ref-screen.filled .ref-img{display:block;}
+  .ref-caption{font-size:11px;color:#e0c7f0;font-family:'Consolas',monospace;opacity:0;transition:opacity .25s ease;text-align:center;padding:0 10px;}
+  .ref-screen.filled .ref-caption{opacity:1;}
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <div class="titlebar"><span>VISION // NEON.GRID</span><div class="live" id="liveStatus"><i></i>OFFLINE</div></div>
+  <div class="main-grid">
+
+    <div class="cam-panel">
+      <img class="cam-feed" id="camFeed" alt="live camera feed">
+      <div class="cam-placeholder" id="camPlaceholder">Menghubungkan ke kamera...</div>
+      <div class="cam-tag">CAM_01 · OBJEK + POSE</div>
+      <div class="cam-scan" id="scan"></div>
+
+      <div class="mascot-dock">
+        <div class="speech-bubble" id="speech"></div>
+        <div class="bld" id="mas">
+          <div class="bld-antenna"></div>
+          <div class="bld-tower">
+            <div class="bld-roofcap"></div>
+            <div class="bld-ledge"></div>
+            <div class="bld-winrow r1"><div class="bld-lit"></div><div class="bld-lit off"></div><div class="bld-lit"></div></div>
+            <div class="bld-eyes"><div class="bld-eye"></div><div class="bld-eye"></div></div>
+            <div class="bld-winrow r3"><div class="bld-lit off"></div><div class="bld-lit"></div><div class="bld-lit off"></div></div>
+            <div class="bld-arm l"></div>
+            <div class="bld-arm r"></div>
+            <div class="bld-mouth"></div>
+            <div class="bld-base"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ref-col">
+      <div class="ref-tag">REFERENSI POSE</div>
+      <div class="ref-screen" id="refScreen">
+        <span class="ref-icon" id="refIcon">🧍</span>
+        <img class="ref-img" id="refImg" alt="referensi pose">
+      </div>
+    </div>
+
+    <div class="bottom-stack">
+      <div class="process-row">
+        <div class="process-top">
+          <span class="k">PROSES DETEKSI</span>
+          <span class="status" id="procStatus"><i></i>Siap</span>
+        </div>
+        <div class="process-bar"><div class="process-fill" id="procFill"></div></div>
+      </div>
+
+      <div class="stat-row">
+        <div class="stat-chip"><span class="k">OBJEK TERDETEKSI</span><span class="v" id="statObj">–</span></div>
+        <div class="stat-chip"><span class="k">WAKTU PROSES</span><span class="v" id="statTime">–</span></div>
+      </div>
+
+      <div class="instr-row">
+        <input type="text" id="promptInput" value="Apa yang kamu lihat sekarang?" placeholder="Tulis instruksi...">
+        <button id="analyzeBtn">➤</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  const camFeed = document.getElementById('camFeed');
+  const camPlaceholder = document.getElementById('camPlaceholder');
+  const liveStatus = document.getElementById('liveStatus');
+  const scan = document.getElementById('scan');
+  const mas = document.getElementById('mas');
+  const speech = document.getElementById('speech');
+  const procStatus = document.getElementById('procStatus');
+  const procFill = document.getElementById('procFill');
+  const statObj = document.getElementById('statObj');
+  const statTime = document.getElementById('statTime');
+  const refScreen = document.getElementById('refScreen');
+  const refImg = document.getElementById('refImg');
+  const analyzeBtn = document.getElementById('analyzeBtn');
+  const promptInput = document.getElementById('promptInput');
+
+  // ---- polling kamera: minta frame terbaru dari Python tiap ~80ms ----
+  async function pollCamera(){
+    try{
+      const res = await window.pywebview.api.get_camera_frame();
+      if(res && res.frame){
+        camFeed.src = res.frame;
+        camFeed.style.display = 'block';
+        camPlaceholder.style.display = 'none';
+        liveStatus.innerHTML = '<i></i>ONLINE';
+      }
+    }catch(e){
+      // pywebview.api belum siap saat pertama kali load, aman diabaikan
+    }
+    setTimeout(pollCamera, 80);
+  }
+
+  // ---- polling pose: JALAN TERUS otomatis, tidak menunggu tombol apa pun ----
+  async function pollPose(){
+    try{
+      const res = await window.pywebview.api.get_pose_reference();
+      if(res && res.image){
+        refImg.src = res.image;
+        refScreen.classList.add('filled');
+      } else {
+        refScreen.classList.remove('filled');
+      }
+    }catch(e){
+      // pywebview.api belum siap saat pertama kali load, aman diabaikan
+    }
+    setTimeout(pollPose, 400);
+  }
+
+  // ---- proses bar simulasi progres selama menunggu respons Gemini ----
+  let progressTimer = null;
+  function startProgress(){
+    let pct = 0;
+    procFill.style.width = '0%';
+    procStatus.className = 'status working';
+    procStatus.innerHTML = '<i></i>Mendeteksi...';
+    progressTimer = setInterval(() => {
+      pct = Math.min(pct + 4, 90); // berhenti di 90% sampai respons benar-benar datang
+      procFill.style.width = pct + '%';
+    }, 120);
+  }
+  function finishProgress(success){
+    clearInterval(progressTimer);
+    procFill.style.width = '100%';
+    procStatus.className = success ? 'status' : 'status error';
+    procStatus.innerHTML = success ? '<i></i>Selesai' : '<i></i>Gagal';
+  }
+
+  async function runAnalyze(){
+    const prompt = promptInput.value.trim() || 'Apa yang kamu lihat sekarang?';
+    analyzeBtn.disabled = true;
+    scan.classList.remove('run'); void scan.offsetWidth; scan.classList.add('run');
+    speech.classList.remove('show');
+    mas.classList.remove('excited');
+    startProgress();
+
+    try{
+      const result = await window.pywebview.api.analyze(prompt);
+      if(result.ok){
+        finishProgress(true);
+        speech.textContent = result.jawaban;
+        statObj.textContent = (result.jumlah_objek === null || result.jumlah_objek === undefined)
+          ? '–' : result.jumlah_objek;
+        statTime.textContent = result.waktu_proses + 's';
+
+        mas.classList.add('excited');
+        speech.classList.add('show');
+
+        setTimeout(() => mas.classList.remove('excited'), 2400);
+      } else {
+        finishProgress(false);
+        speech.textContent = result.error || 'Terjadi kesalahan.';
+        speech.classList.add('show');
+      }
+    } catch(e){
+      finishProgress(false);
+      speech.textContent = 'Gagal memanggil backend: ' + e;
+      speech.classList.add('show');
+    } finally {
+      analyzeBtn.disabled = false;
+    }
+  }
+
+  analyzeBtn.addEventListener('click', runAnalyze);
+  promptInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') runAnalyze(); });
+
+  // ---- start setelah pywebview API siap ----
+  window.addEventListener('pywebviewready', async () => {
+    await window.pywebview.api.start_camera();
+    pollCamera();
+    pollPose();
+  });
+</script>
+
+</body>
+</html>
