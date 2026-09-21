@@ -3,6 +3,6 @@ opencv-python>=4.9
 requests>=2.31
 gTTS>=2.5
 pygame>=2.5
-mediapipe>=0.10
+mediapipe>=0.10.14
 
-# $env:GEMINI_API_KEY = "kunci_kamu"
+# $env:GEMINI_API_KEY = "kunci_kamu"p
